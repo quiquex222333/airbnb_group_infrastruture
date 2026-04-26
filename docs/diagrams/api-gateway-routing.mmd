@@ -1,0 +1,25 @@
+flowchart TD
+    APIGW["API Gateway /prod"]
+
+    APIGW --> V1["/v1"]
+
+    V1 --> Users["/users"]
+    V1 --> Listings["/listings"]
+    V1 --> Bookings["/bookings"]
+    V1 --> Reviews["/reviews"]
+
+    Users --> PostUsers["POST createUser"]
+    Listings --> PostListings["POST createListing"]
+
+    Bookings --> PostBookings["POST createBooking"]
+    Bookings --> BookingById["GET /bookings/:bookingId"]
+
+    Reviews --> PostReviews["POST createReview"]
+    Reviews --> ReviewsByListing["GET /reviews/listing/:listingId"]
+
+    PostUsers --> Cognito["Cognito Authorizer"]
+    PostListings --> Cognito
+    PostBookings --> Cognito
+    BookingById --> Cognito
+    PostReviews --> Cognito
+    ReviewsByListing --> Cognito

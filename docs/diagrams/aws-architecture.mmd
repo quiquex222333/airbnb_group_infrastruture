@@ -1,0 +1,28 @@
+flowchart TD
+    Client[Client / Postman] --> APIGW[API Gateway]
+
+    Cognito[Cognito User Pool] --> APIGW
+
+    APIGW --> UserLambda[User Lambda]
+    APIGW --> ListingLambda[Listing Lambda]
+    APIGW --> BookingLambda[Booking Lambda]
+    APIGW --> ReviewLambda[Review Lambda]
+
+    UserLambda --> UsersTable[(DynamoDB UsersTable)]
+    ListingLambda --> ListingsTable[(DynamoDB ListingsTable)]
+    BookingLambda --> BookingsTable[(DynamoDB BookingsTable)]
+    ReviewLambda --> ReviewsTable[(DynamoDB ReviewsTable)]
+
+    UserLambda --> EventBridge[EventBridge Custom Bus]
+    ListingLambda --> EventBridge
+    BookingLambda --> EventBridge
+    ReviewLambda --> EventBridge
+
+    EventBridge --> NotificationQueue[SQS NotificationQueue]
+    NotificationQueue --> NotificationLambda[Notification Lambda]
+
+    UserLambda --> CloudWatch[CloudWatch Logs]
+    ListingLambda --> CloudWatch
+    BookingLambda --> CloudWatch
+    ReviewLambda --> CloudWatch
+    NotificationLambda --> CloudWatch

@@ -1,0 +1,15 @@
+flowchart TD
+    ServicesRepo[airbnb_group_services repo] --> LambdaCode[Lambda source code]
+    ServicesRepo --> Contracts[Smithy + shared contracts]
+
+    InfraRepo[airbnb_group_infrastructure repo] --> CDK[AWS CDK App]
+
+    CDK --> LambdaCode
+    CDK --> AWS[AWS Cloud]
+
+    AWS --> APIGW[API Gateway]
+    AWS --> Cognito[Cognito]
+    AWS --> DynamoDB[DynamoDB Tables]
+    AWS --> EventBridge[EventBridge]
+    AWS --> SQS[SQS]
+    AWS --> Lambdas[Lambda Functions]
