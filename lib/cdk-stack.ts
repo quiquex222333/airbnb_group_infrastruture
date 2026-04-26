@@ -67,6 +67,16 @@ export class CdkStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
     });
 
+    const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
+      partitionKey: { name: "reviewId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+    });
+
+    reviewsTable.addGlobalSecondaryIndex({
+      indexName: "listingId-index",
+      partitionKey: { name: "listingId", type: dynamodb.AttributeType.STRING }
+    });
+
     // Lambda
     const servicesRoot = path.join(__dirname, "../../airbnb_group_services");
 
@@ -129,6 +139,35 @@ export class CdkStack extends cdk.Stack {
       }
     });
 
+    const reviewLambda = new lambdaNodejs.NodejsFunction(this, "ReviewLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/review-service/src/handler.ts"
+      ),
+      handler: "createReview",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        REVIEWS_TABLE: reviewsTable.tableName,
+        EVENT_BUS_NAME: eventBus.eventBusName
+      }
+    });
+
+    const getReviewsLambda = new lambdaNodejs.NodejsFunction(this, "GetReviewsLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/review-service/src/handler.ts"
+      ),
+      handler: "getReviewsByListing",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        REVIEWS_TABLE: reviewsTable.tableName
+      }
+    });
+
     const notificationLambda = new lambdaNodejs.NodejsFunction(this, "NotificationLambda", {
       runtime: lambda.Runtime.NODEJS_20_X,
       entry: path.join(
@@ -152,6 +191,9 @@ export class CdkStack extends cdk.Stack {
     bookingsTable.grantWriteData(bookingLambda);
     bookingsTable.grantReadData(getBookingLambda);
     eventBus.grantPutEventsTo(bookingLambda);
+    reviewsTable.grantWriteData(reviewLambda);
+    reviewsTable.grantReadData(getReviewsLambda);
+    eventBus.grantPutEventsTo(reviewLambda);
 
     // API Gateway
     const api = new apigateway.RestApi(this, "AirbnbApi", {
@@ -203,6 +245,24 @@ export class CdkStack extends cdk.Stack {
     bookingById.addMethod(
       "GET",
       new apigateway.LambdaIntegration(getBookingLambda),
+      {
+        authorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO
+      }
+    );
+
+    const reviews = v1.addResource("reviews");
+
+    reviews.addMethod("POST", new apigateway.LambdaIntegration(reviewLambda), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO
+    });
+
+    const reviewsByListing = reviews.addResource("listing").addResource("{listingId}");
+
+    reviewsByListing.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getReviewsLambda),
       {
         authorizer,
         authorizationType: apigateway.AuthorizationType.COGNITO
