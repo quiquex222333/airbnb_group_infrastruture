@@ -57,6 +57,11 @@ export class CdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY // solo para demo
     });
 
+    const listingsTable = new dynamodb.Table(this, "ListingsTable", {
+      partitionKey: { name: "listingId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+    });
+
     // Lambda
     const servicesRoot = path.join(__dirname, "../../airbnb_group_services");
 
@@ -71,6 +76,21 @@ export class CdkStack extends cdk.Stack {
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
         USERS_TABLE: usersTable.tableName,
+        EVENT_BUS_NAME: eventBus.eventBusName
+      }
+    });
+
+    const listingLambda = new lambdaNodejs.NodejsFunction(this, "ListingLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/listing-service/src/handler.ts"
+      ),
+      handler: "createListing",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        LISTINGS_TABLE: listingsTable.tableName,
         EVENT_BUS_NAME: eventBus.eventBusName
       }
     });
@@ -93,6 +113,8 @@ export class CdkStack extends cdk.Stack {
     // Permisos
     usersTable.grantWriteData(userLambda);
     eventBus.grantPutEventsTo(userLambda);
+    listingsTable.grantWriteData(listingLambda);
+    eventBus.grantPutEventsTo(listingLambda);
 
     // API Gateway
     const api = new apigateway.RestApi(this, "AirbnbApi", {
@@ -104,11 +126,24 @@ export class CdkStack extends cdk.Stack {
       cognitoUserPools: [userPool]
     });
 
-    const users = api.root.addResource("v1").addResource("users");
+    const v1 = api.root.addResource("v1");
+
+    const users = v1.addResource("users");
 
     users.addMethod(
       "POST",
       new apigateway.LambdaIntegration(userLambda),
+      {
+        authorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO
+      }
+    );
+
+    const listings = v1.addResource("listings");
+
+    listings.addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(listingLambda),
       {
         authorizer,
         authorizationType: apigateway.AuthorizationType.COGNITO
