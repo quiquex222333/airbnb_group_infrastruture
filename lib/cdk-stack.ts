@@ -62,6 +62,11 @@ export class CdkStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
     });
 
+    const bookingsTable = new dynamodb.Table(this, "BookingsTable", {
+      partitionKey: { name: "bookingId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+    });
+
     // Lambda
     const servicesRoot = path.join(__dirname, "../../airbnb_group_services");
 
@@ -95,6 +100,35 @@ export class CdkStack extends cdk.Stack {
       }
     });
 
+    const bookingLambda = new lambdaNodejs.NodejsFunction(this, "BookingLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/booking-service/src/handler.ts"
+      ),
+      handler: "createBooking",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        BOOKINGS_TABLE: bookingsTable.tableName,
+        EVENT_BUS_NAME: eventBus.eventBusName
+      }
+    });
+
+    const getBookingLambda = new lambdaNodejs.NodejsFunction(this, "GetBookingLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/booking-service/src/handler.ts"
+      ),
+      handler: "getBookingById",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        BOOKINGS_TABLE: bookingsTable.tableName
+      }
+    });
+
     const notificationLambda = new lambdaNodejs.NodejsFunction(this, "NotificationLambda", {
       runtime: lambda.Runtime.NODEJS_20_X,
       entry: path.join(
@@ -115,6 +149,9 @@ export class CdkStack extends cdk.Stack {
     eventBus.grantPutEventsTo(userLambda);
     listingsTable.grantWriteData(listingLambda);
     eventBus.grantPutEventsTo(listingLambda);
+    bookingsTable.grantWriteData(bookingLambda);
+    bookingsTable.grantReadData(getBookingLambda);
+    eventBus.grantPutEventsTo(bookingLambda);
 
     // API Gateway
     const api = new apigateway.RestApi(this, "AirbnbApi", {
@@ -144,6 +181,28 @@ export class CdkStack extends cdk.Stack {
     listings.addMethod(
       "POST",
       new apigateway.LambdaIntegration(listingLambda),
+      {
+        authorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO
+      }
+    );
+
+    const bookings = v1.addResource("bookings");
+
+    bookings.addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(bookingLambda),
+      {
+        authorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO
+      }
+    );
+
+    const bookingById = bookings.addResource("{bookingId}");
+
+    bookingById.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getBookingLambda),
       {
         authorizer,
         authorizationType: apigateway.AuthorizationType.COGNITO
