@@ -1,0 +1,9 @@
+flowchart LR
+    UserLambda[User Lambda] -->|user.created| EventBridge[EventBridge]
+    ListingLambda[Listing Lambda] -->|listing.created| EventBridge
+    BookingLambda[Booking Lambda] -->|booking.created| EventBridge
+    ReviewLambda[Review Lambda] -->|review.created| EventBridge
+
+    EventBridge -->|matched events| SQS[SQS NotificationQueue]
+    SQS --> NotificationLambda[Notification Lambda]
+    NotificationLambda --> CloudWatch[CloudWatch Logs]

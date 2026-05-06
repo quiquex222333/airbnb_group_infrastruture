@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant User
+    participant Cognito
+    participant APIGateway
+    participant Lambda
+
+    User->>Cognito: SignUp
+    Cognito-->>User: Confirmation code
+
+    User->>Cognito: ConfirmSignUp
+    Cognito-->>User: User confirmed
+
+    User->>Cognito: InitiateAuth
+    Cognito-->>User: IdToken JWT
+
+    User->>APIGateway: Request with Bearer IdToken
+    APIGateway->>Cognito: Validate JWT
+    APIGateway->>Lambda: Invoke protected Lambda
+    Lambda-->>APIGateway: Response
+    APIGateway-->>User: API response
