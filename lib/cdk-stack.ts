@@ -19,14 +19,25 @@ export class CdkStack extends cdk.Stack {
 
     const notificationQueue = new sqs.Queue(this, "NotificationQueue");
 
-    new events.Rule(this, "UserCreatedRule", {
-      eventBus,
-      eventPattern: {
-        source: ["user.service"],
-        detailType: ["user.created"]
-      },
-      targets: [new targets.SqsQueue(notificationQueue)]
-    });
+    new events.Rule(this, "NotificationEventsRule", {
+    eventBus,
+    eventPattern: {
+      source: [
+        "auth.service",
+        "user.service",
+        "listing.service",
+        "booking.service",
+        "review.service"
+      ],
+      detailType: [
+        "user.created",
+        "listing.created",
+        "booking.created",
+        "review.created"
+      ]
+    },
+    targets: [new targets.SqsQueue(notificationQueue)]
+  });
 
     // Cognito User Pool
     const userPool = new cognito.UserPool(this, "UserPool", {
@@ -72,6 +83,12 @@ export class CdkStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
     });
 
+    const notificationsTable = new dynamodb.Table(this, "NotificationsTable", {
+      partitionKey: { name: "notificationId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
     reviewsTable.addGlobalSecondaryIndex({
       indexName: "listingId-index",
       partitionKey: { name: "listingId", type: dynamodb.AttributeType.STRING }
@@ -79,6 +96,51 @@ export class CdkStack extends cdk.Stack {
 
     // Lambda
     const servicesRoot = path.join(__dirname, "../../airbnb_group_services");
+
+    const authRegisterLambda = new lambdaNodejs.NodejsFunction(this, "AuthRegisterLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/auth-service/src/handler.ts"
+      ),
+      handler: "register",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId
+      }
+    });
+
+    const authConfirmLambda = new lambdaNodejs.NodejsFunction(this, "AuthConfirmLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/auth-service/src/handler.ts"
+      ),
+      handler: "confirm",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        USER_POOL_ID: userPool.userPoolId,
+        USERS_TABLE: usersTable.tableName,
+        EVENT_BUS_NAME: eventBus.eventBusName
+      }
+    });
+
+    const authLoginLambda = new lambdaNodejs.NodejsFunction(this, "AuthLoginLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/auth-service/src/handler.ts"
+      ),
+      handler: "login",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId
+      }
+    });
 
     const userLambda = new lambdaNodejs.NodejsFunction(this, "UserLambda", {
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -176,7 +238,10 @@ export class CdkStack extends cdk.Stack {
       ),
       handler: "handleUserCreated",
       projectRoot: servicesRoot,
-      depsLockFilePath: path.join(servicesRoot, "package-lock.json")
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        NOTIFICATIONS_TABLE: notificationsTable.tableName
+      }
     });
 
     notificationLambda.addEventSource(
@@ -194,6 +259,17 @@ export class CdkStack extends cdk.Stack {
     reviewsTable.grantWriteData(reviewLambda);
     reviewsTable.grantReadData(getReviewsLambda);
     eventBus.grantPutEventsTo(reviewLambda);
+    notificationsTable.grantWriteData(notificationLambda);
+    usersTable.grantWriteData(authConfirmLambda);
+    eventBus.grantPutEventsTo(authConfirmLambda);
+
+
+    authConfirmLambda.addToRolePolicy(
+      new cdk.aws_iam.PolicyStatement({
+        actions: ["cognito-idp:AdminGetUser"],
+        resources: [userPool.userPoolArn]
+      })
+    );
 
     // API Gateway
     const api = new apigateway.RestApi(this, "AirbnbApi", {
@@ -206,6 +282,23 @@ export class CdkStack extends cdk.Stack {
     });
 
     const v1 = api.root.addResource("v1");
+
+    const auth = v1.addResource("auth");
+
+    auth.addResource("register").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(authRegisterLambda)
+    );
+
+    auth.addResource("confirm").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(authConfirmLambda)
+    );
+
+    auth.addResource("login").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(authLoginLambda)
+    );
 
     const users = v1.addResource("users");
 
@@ -292,6 +385,10 @@ export class CdkStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "NotificationQueueName", {
       value: notificationQueue.queueName
+    });
+
+    new cdk.CfnOutput(this, "NotificationsTableName", {
+      value: notificationsTable.tableName
     });
   }
 }
