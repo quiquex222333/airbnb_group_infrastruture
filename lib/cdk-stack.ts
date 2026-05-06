@@ -17,7 +17,20 @@ export class CdkStack extends cdk.Stack {
 
     const eventBus = new events.EventBus(this, "AirbnbEventBus");
 
-    const notificationQueue = new sqs.Queue(this, "NotificationQueue");
+    const notificationDlq = new sqs.Queue(this, "NotificationDLQ", {
+      retentionPeriod: cdk.Duration.days(14),
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    const notificationQueue = new sqs.Queue(this, "NotificationQueue", {
+      visibilityTimeout: cdk.Duration.seconds(60),
+      retentionPeriod: cdk.Duration.days(4),
+      deadLetterQueue: {
+        queue: notificationDlq,
+        maxReceiveCount: 3
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
 
     new events.Rule(this, "NotificationEventsRule", {
     eventBus,
@@ -245,7 +258,10 @@ export class CdkStack extends cdk.Stack {
     });
 
     notificationLambda.addEventSource(
-      new lambdaEventSources.SqsEventSource(notificationQueue)
+      new lambdaEventSources.SqsEventSource(notificationQueue, {
+        batchSize: 5,
+        reportBatchItemFailures: true
+      })
     );
 
     // Permisos
@@ -381,6 +397,14 @@ export class CdkStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "NotificationQueueUrl", {
       value: notificationQueue.queueUrl
+    });
+
+    new cdk.CfnOutput(this, "NotificationDLQUrl", {
+      value: notificationDlq.queueUrl
+    });
+
+    new cdk.CfnOutput(this, "NotificationDLQName", {
+      value: notificationDlq.queueName
     });
 
     new cdk.CfnOutput(this, "NotificationQueueName", {
