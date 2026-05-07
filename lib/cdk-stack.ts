@@ -155,6 +155,20 @@ export class CdkStack extends cdk.Stack {
       }
     });
 
+    const authRefreshLambda = new lambdaNodejs.NodejsFunction(this, "AuthRefreshLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/auth-service/src/handler.ts"
+      ),
+      handler: "refresh",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId
+      }
+    });
+
     const userLambda = new lambdaNodejs.NodejsFunction(this, "UserLambda", {
       runtime: lambda.Runtime.NODEJS_20_X,
       entry: path.join(
@@ -290,6 +304,12 @@ export class CdkStack extends cdk.Stack {
     // API Gateway
     const api = new apigateway.RestApi(this, "AirbnbApi", {
       restApiName: "Airbnb Service",
+      defaultCorsPreflightOptions: {
+        allowOrigins: ["http://localhost:5173"],
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key", "X-Amz-Security-Token"],
+        allowCredentials: true,
+      }
     });
 
     // Cognito Authorizer
@@ -314,6 +334,11 @@ export class CdkStack extends cdk.Stack {
     auth.addResource("login").addMethod(
       "POST",
       new apigateway.LambdaIntegration(authLoginLambda)
+    );
+
+    auth.addResource("refresh").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(authRefreshLambda)
     );
 
     const users = v1.addResource("users");
