@@ -62,6 +62,9 @@ export class CdkStack extends cdk.Stack {
         requireLowercase: true,
         requireUppercase: true,
         requireDigits: true
+      },
+      customAttributes: {
+        role: new cognito.StringAttribute({ mutable: true })
       }
     });
 
@@ -151,7 +154,9 @@ export class CdkStack extends cdk.Stack {
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
-        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        USER_POOL_ID: userPool.userPoolId,
+        USERS_TABLE: usersTable.tableName
       }
     });
 
@@ -165,7 +170,8 @@ export class CdkStack extends cdk.Stack {
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
-        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        USERS_TABLE: usersTable.tableName
       }
     });
 
@@ -291,6 +297,8 @@ export class CdkStack extends cdk.Stack {
     eventBus.grantPutEventsTo(reviewLambda);
     notificationsTable.grantWriteData(notificationLambda);
     usersTable.grantWriteData(authConfirmLambda);
+    usersTable.grantReadData(authLoginLambda);
+    usersTable.grantReadData(authRefreshLambda);
     eventBus.grantPutEventsTo(authConfirmLambda);
 
 
