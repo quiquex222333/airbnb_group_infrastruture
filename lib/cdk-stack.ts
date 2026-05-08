@@ -175,6 +175,17 @@ export class CdkStack extends cdk.Stack {
       }
     });
 
+    const authLogoutLambda = new lambdaNodejs.NodejsFunction(this, "AuthLogoutLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/auth-service/src/handler.ts"
+      ),
+      handler: "logout",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+    });
+
     const userLambda = new lambdaNodejs.NodejsFunction(this, "UserLambda", {
       runtime: lambda.Runtime.NODEJS_20_X,
       entry: path.join(
@@ -347,6 +358,11 @@ export class CdkStack extends cdk.Stack {
     auth.addResource("refresh").addMethod(
       "POST",
       new apigateway.LambdaIntegration(authRefreshLambda)
+    );
+
+    auth.addResource("logout").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(authLogoutLambda)
     );
 
     const users = v1.addResource("users");
