@@ -62,6 +62,9 @@ export class CdkStack extends cdk.Stack {
         requireLowercase: true,
         requireUppercase: true,
         requireDigits: true
+      },
+      customAttributes: {
+        role: new cognito.StringAttribute({ mutable: true })
       }
     });
 
@@ -151,8 +154,36 @@ export class CdkStack extends cdk.Stack {
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
-        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        USER_POOL_ID: userPool.userPoolId,
+        USERS_TABLE: usersTable.tableName
       }
+    });
+
+    const authRefreshLambda = new lambdaNodejs.NodejsFunction(this, "AuthRefreshLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/auth-service/src/handler.ts"
+      ),
+      handler: "refresh",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        USERS_TABLE: usersTable.tableName
+      }
+    });
+
+    const authLogoutLambda = new lambdaNodejs.NodejsFunction(this, "AuthLogoutLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(
+        servicesRoot,
+        "services/auth-service/src/handler.ts"
+      ),
+      handler: "logout",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
     });
 
     const userLambda = new lambdaNodejs.NodejsFunction(this, "UserLambda", {
@@ -277,6 +308,8 @@ export class CdkStack extends cdk.Stack {
     eventBus.grantPutEventsTo(reviewLambda);
     notificationsTable.grantWriteData(notificationLambda);
     usersTable.grantWriteData(authConfirmLambda);
+    usersTable.grantReadData(authLoginLambda);
+    usersTable.grantReadData(authRefreshLambda);
     eventBus.grantPutEventsTo(authConfirmLambda);
 
 
@@ -290,6 +323,12 @@ export class CdkStack extends cdk.Stack {
     // API Gateway
     const api = new apigateway.RestApi(this, "AirbnbApi", {
       restApiName: "Airbnb Service",
+      defaultCorsPreflightOptions: {
+        allowOrigins: ["http://localhost:5173"],
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key", "X-Amz-Security-Token"],
+        allowCredentials: true,
+      }
     });
 
     // Cognito Authorizer
@@ -314,6 +353,16 @@ export class CdkStack extends cdk.Stack {
     auth.addResource("login").addMethod(
       "POST",
       new apigateway.LambdaIntegration(authLoginLambda)
+    );
+
+    auth.addResource("refresh").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(authRefreshLambda)
+    );
+
+    auth.addResource("logout").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(authLogoutLambda)
     );
 
     const users = v1.addResource("users");
