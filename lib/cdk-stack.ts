@@ -89,9 +89,24 @@ export class CdkStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
     });
 
+    listingsTable.addGlobalSecondaryIndex({
+      indexName: "ownerId-index",
+      partitionKey: { name: "ownerId", type: dynamodb.AttributeType.STRING }
+    });
+
     const bookingsTable = new dynamodb.Table(this, "BookingsTable", {
       partitionKey: { name: "bookingId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+    });
+
+    bookingsTable.addGlobalSecondaryIndex({
+      indexName: "guestId-index",
+      partitionKey: { name: "guestId", type: dynamodb.AttributeType.STRING }
+    });
+
+    bookingsTable.addGlobalSecondaryIndex({
+      indexName: "listingId-index",
+      partitionKey: { name: "listingId", type: dynamodb.AttributeType.STRING }
     });
 
     const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
@@ -216,6 +231,24 @@ export class CdkStack extends cdk.Stack {
       }
     });
 
+    const getListingsLambda = new lambdaNodejs.NodejsFunction(this, "GetListingsLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(servicesRoot, "services/listing-service/src/handler.ts"),
+      handler: "getListingsByOwner",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: { LISTINGS_TABLE: listingsTable.tableName }
+    });
+
+    const getAllListingsLambda = new lambdaNodejs.NodejsFunction(this, "GetAllListingsLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(servicesRoot, "services/listing-service/src/handler.ts"),
+      handler: "getAllListings",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: { LISTINGS_TABLE: listingsTable.tableName }
+    });
+
     const bookingLambda = new lambdaNodejs.NodejsFunction(this, "BookingLambda", {
       runtime: lambda.Runtime.NODEJS_20_X,
       entry: path.join(
@@ -229,6 +262,24 @@ export class CdkStack extends cdk.Stack {
         BOOKINGS_TABLE: bookingsTable.tableName,
         EVENT_BUS_NAME: eventBus.eventBusName
       }
+    });
+
+    const getBookingsLambda = new lambdaNodejs.NodejsFunction(this, "GetBookingsLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(servicesRoot, "services/booking-service/src/handler.ts"),
+      handler: "getBookingsByGuest",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: { BOOKINGS_TABLE: bookingsTable.tableName }
+    });
+
+    const getBookingsByListingLambda = new lambdaNodejs.NodejsFunction(this, "GetBookingsByListingLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(servicesRoot, "services/booking-service/src/handler.ts"),
+      handler: "getBookingsByListing",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: { BOOKINGS_TABLE: bookingsTable.tableName }
     });
 
     const getBookingLambda = new lambdaNodejs.NodejsFunction(this, "GetBookingLambda", {
@@ -311,6 +362,10 @@ export class CdkStack extends cdk.Stack {
     usersTable.grantReadData(authLoginLambda);
     usersTable.grantReadData(authRefreshLambda);
     eventBus.grantPutEventsTo(authConfirmLambda);
+    listingsTable.grantReadData(getListingsLambda);
+    listingsTable.grantReadData(getAllListingsLambda);
+    bookingsTable.grantReadData(getBookingsLambda);
+    bookingsTable.grantReadData(getBookingsByListingLambda);
 
 
     authConfirmLambda.addToRolePolicy(
@@ -387,6 +442,18 @@ export class CdkStack extends cdk.Stack {
       }
     );
 
+    listings.addResource("my").addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getListingsLambda),
+      { authorizer, authorizationType: apigateway.AuthorizationType.COGNITO }
+    );
+
+    listings.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getAllListingsLambda)
+      // Sin authorizer — endpoint público
+    );
+
     const bookings = v1.addResource("bookings");
 
     bookings.addMethod(
@@ -409,6 +476,18 @@ export class CdkStack extends cdk.Stack {
       }
     );
 
+    bookings.addResource("my").addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getBookingsLambda),
+      { authorizer, authorizationType: apigateway.AuthorizationType.COGNITO }
+    );
+
+    const listingBookings = listings.addResource("{listingId}").addResource("bookings");
+    listingBookings.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getBookingsByListingLambda),
+      { authorizer, authorizationType: apigateway.AuthorizationType.COGNITO }
+    );
     const reviews = v1.addResource("reviews");
 
     reviews.addMethod("POST", new apigateway.LambdaIntegration(reviewLambda), {
