@@ -127,6 +127,7 @@ export class CdkStack extends cdk.Stack {
 
     // Lambda
     const servicesRoot = path.join(__dirname, "../../airbnb_group_services");
+    const frontendUrl = process.env.FRONTEND_URL!;
 
     const authRegisterLambda = new lambdaNodejs.NodejsFunction(this, "AuthRegisterLambda", {
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -138,7 +139,8 @@ export class CdkStack extends cdk.Stack {
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
-        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -155,7 +157,8 @@ export class CdkStack extends cdk.Stack {
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         USER_POOL_ID: userPool.userPoolId,
         USERS_TABLE: usersTable.tableName,
-        EVENT_BUS_NAME: eventBus.eventBusName
+        EVENT_BUS_NAME: eventBus.eventBusName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -171,7 +174,8 @@ export class CdkStack extends cdk.Stack {
       environment: {
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         USER_POOL_ID: userPool.userPoolId,
-        USERS_TABLE: usersTable.tableName
+        USERS_TABLE: usersTable.tableName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -186,7 +190,8 @@ export class CdkStack extends cdk.Stack {
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
-        USERS_TABLE: usersTable.tableName
+        USERS_TABLE: usersTable.tableName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -199,6 +204,9 @@ export class CdkStack extends cdk.Stack {
       handler: "logout",
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        FRONTEND_URL: frontendUrl
+      }
     });
 
     const userLambda = new lambdaNodejs.NodejsFunction(this, "UserLambda", {
@@ -212,7 +220,8 @@ export class CdkStack extends cdk.Stack {
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
         USERS_TABLE: usersTable.tableName,
-        EVENT_BUS_NAME: eventBus.eventBusName
+        EVENT_BUS_NAME: eventBus.eventBusName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -227,7 +236,8 @@ export class CdkStack extends cdk.Stack {
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
         LISTINGS_TABLE: listingsTable.tableName,
-        EVENT_BUS_NAME: eventBus.eventBusName
+        EVENT_BUS_NAME: eventBus.eventBusName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -237,7 +247,10 @@ export class CdkStack extends cdk.Stack {
       handler: "getListingsByOwner",
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
-      environment: { LISTINGS_TABLE: listingsTable.tableName }
+      environment: { 
+        LISTINGS_TABLE: listingsTable.tableName,
+        FRONTEND_URL: frontendUrl
+      }
     });
 
     const getAllListingsLambda = new lambdaNodejs.NodejsFunction(this, "GetAllListingsLambda", {
@@ -246,7 +259,10 @@ export class CdkStack extends cdk.Stack {
       handler: "getAllListings",
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
-      environment: { LISTINGS_TABLE: listingsTable.tableName }
+      environment: { 
+        LISTINGS_TABLE: listingsTable.tableName,
+        FRONTEND_URL: frontendUrl
+      }
     });
 
     const bookingLambda = new lambdaNodejs.NodejsFunction(this, "BookingLambda", {
@@ -260,7 +276,8 @@ export class CdkStack extends cdk.Stack {
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
         BOOKINGS_TABLE: bookingsTable.tableName,
-        EVENT_BUS_NAME: eventBus.eventBusName
+        EVENT_BUS_NAME: eventBus.eventBusName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -270,7 +287,10 @@ export class CdkStack extends cdk.Stack {
       handler: "getBookingsByGuest",
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
-      environment: { BOOKINGS_TABLE: bookingsTable.tableName }
+      environment: { 
+        BOOKINGS_TABLE: bookingsTable.tableName,
+        FRONTEND_URL: frontendUrl
+      }
     });
 
     const getBookingsByListingLambda = new lambdaNodejs.NodejsFunction(this, "GetBookingsByListingLambda", {
@@ -279,7 +299,10 @@ export class CdkStack extends cdk.Stack {
       handler: "getBookingsByListing",
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
-      environment: { BOOKINGS_TABLE: bookingsTable.tableName }
+      environment: { 
+        BOOKINGS_TABLE: bookingsTable.tableName,
+        FRONTEND_URL: frontendUrl
+      }
     });
 
     const getBookingLambda = new lambdaNodejs.NodejsFunction(this, "GetBookingLambda", {
@@ -292,7 +315,8 @@ export class CdkStack extends cdk.Stack {
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
-        BOOKINGS_TABLE: bookingsTable.tableName
+        BOOKINGS_TABLE: bookingsTable.tableName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -307,7 +331,8 @@ export class CdkStack extends cdk.Stack {
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
         REVIEWS_TABLE: reviewsTable.tableName,
-        EVENT_BUS_NAME: eventBus.eventBusName
+        EVENT_BUS_NAME: eventBus.eventBusName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -321,7 +346,8 @@ export class CdkStack extends cdk.Stack {
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
       environment: {
-        REVIEWS_TABLE: reviewsTable.tableName
+        REVIEWS_TABLE: reviewsTable.tableName,
+        FRONTEND_URL: frontendUrl
       }
     });
 
@@ -379,7 +405,7 @@ export class CdkStack extends cdk.Stack {
     const api = new apigateway.RestApi(this, "AirbnbApi", {
       restApiName: "Airbnb Service",
       defaultCorsPreflightOptions: {
-        allowOrigins: ["http://localhost:5173"],
+        allowOrigins: [frontendUrl],
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: ["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key", "X-Amz-Security-Token"],
         allowCredentials: true,
