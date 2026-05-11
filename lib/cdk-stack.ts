@@ -10,6 +10,11 @@ import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
+// impports para frontend y s3 este codigo no es autogenerado
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
+import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -532,6 +537,59 @@ export class CdkStack extends cdk.Stack {
       }
     );
 
+    // S3 Bucket para hosting frontend
+    const frontendDistPath = path.join(
+      __dirname,
+      "../../airbnb_group_front/dist"
+    );
+
+    const frontendBucket = new s3.Bucket(this, "FrontendBucket", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
+    });
+
+    const spaRoutingFunction = new cloudfront.Function(this, "SpaRoutingFunction", {
+      code: cloudfront.FunctionCode.fromInline(`
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+
+          if (uri !== "/" && !uri.includes(".")) {
+            request.uri = "/index.html";
+          }
+
+          return request;
+        }
+        `)
+    });
+
+    const distribution = new cloudfront.Distribution(this, "FrontendDistribution", {
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        functionAssociations: [{
+          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          function: spaRoutingFunction
+        }]
+      },
+      defaultRootObject: "index.html"
+    });
+
+    distribution.addBehavior("/v1/*", new origins.RestApiOrigin(api), {
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+    });
+
+    new s3deploy.BucketDeployment(this, "DeployFrontend", {
+      sources: [s3deploy.Source.asset(frontendDistPath)],
+      destinationBucket: frontendBucket,
+      distribution,
+      distributionPaths: ["/*"]
+    });
+
     // Outputs
     new cdk.CfnOutput(this, "UserPoolId", {
       value: userPool.userPoolId
@@ -567,6 +625,10 @@ export class CdkStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "NotificationsTableName", {
       value: notificationsTable.tableName
+    });
+
+    new cdk.CfnOutput(this, "FrontendUrl", {
+      value: `https://${distribution.distributionDomainName}`
     });
   }
 }

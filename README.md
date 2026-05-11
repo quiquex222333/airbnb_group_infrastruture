@@ -195,6 +195,24 @@ npx cdk synth
 npx cdk deploy
 ```
 
+### Deploy unificado (infra + frontend)
+
+Al ejecutar `cdk synth/deploy` desde este repo, el script `bin/cdk.ts` ahora compila automaticamente el frontend (`../airbnb_group_front`) antes de sintetizar el stack.
+
+- Fuerza `VITE_API_URL=/v1` por defecto para que el frontend use la misma distribucion CloudFront y no quede atado al API ID de API Gateway.
+- Esto evita tener que redeployar el frontend cuando se recrea el stack y cambia el dominio `execute-api`.
+
+Variables opcionales:
+
+- `FRONTEND_BUILD_API_URL`: sobrescribe la base del frontend en build (default: `/v1`).
+- `SKIP_FRONTEND_BUILD=1`: omite la compilacion automatica del frontend.
+
+Variable obligatoria:
+
+- `FRONTEND_URL`: origen permitido en CORS para API/Lambdas.
+  - En local: `http://localhost:5173`
+  - En produccion: dominio real del frontend (idealmente un dominio estable propio, no uno temporal).
+
 ## Comandos utiles
 
 ```bash
