@@ -59,6 +59,7 @@ export class CdkStack extends cdk.Stack {
 
     // Cognito User Pool
     const userPool = new cognito.UserPool(this, "UserPool", {
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       selfSignUpEnabled: true,
       signInAliases: { email: true },
       autoVerify: { email: true },
@@ -86,12 +87,13 @@ export class CdkStack extends cdk.Stack {
     const usersTable = new dynamodb.Table(this, "UsersTable", {
       partitionKey: { name: "email", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // solo para demo
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     const listingsTable = new dynamodb.Table(this, "ListingsTable", {
       partitionKey: { name: "listingId", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     listingsTable.addGlobalSecondaryIndex({
@@ -101,7 +103,8 @@ export class CdkStack extends cdk.Stack {
 
     const bookingsTable = new dynamodb.Table(this, "BookingsTable", {
       partitionKey: { name: "bookingId", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     bookingsTable.addGlobalSecondaryIndex({
@@ -116,7 +119,8 @@ export class CdkStack extends cdk.Stack {
 
     const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
       partitionKey: { name: "reviewId", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     const notificationsTable = new dynamodb.Table(this, "NotificationsTable", {
@@ -370,6 +374,17 @@ export class CdkStack extends cdk.Stack {
       }
     });
 
+    const mlPredictionLambda = new lambdaNodejs.NodejsFunction(this, "MlPredictionLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(servicesRoot, "services/ml-service/src/handler.ts"),
+      handler: "predictSegment",
+      projectRoot: servicesRoot,
+      depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      environment: {
+        FRONTEND_URL: frontendUrl
+      }
+    });
+
     notificationLambda.addEventSource(
       new lambdaEventSources.SqsEventSource(notificationQueue, {
         batchSize: 5,
@@ -537,6 +552,16 @@ export class CdkStack extends cdk.Stack {
       }
     );
 
+    const ml = v1.addResource("ml");
+    ml.addResource("predict").addMethod(
+      "POST",
+      new apigateway.LambdaIntegration(mlPredictionLambda),
+      {
+        authorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO
+      }
+    );
+
     // S3 Bucket para hosting frontend
     const frontendDistPath = path.join(
       __dirname,
@@ -630,5 +655,7 @@ export class CdkStack extends cdk.Stack {
     new cdk.CfnOutput(this, "FrontendUrl", {
       value: `https://${distribution.distributionDomainName}`
     });
+
+    cdk.RemovalPolicies.of(this).destroy();
   }
 }

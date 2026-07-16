@@ -6,6 +6,15 @@ Este repo crea recursos en AWS y empaqueta Lambdas cuyo codigo fuente vive en un
 
 - `../airbnb_group_services`
 
+## Proyecto multi-repositorio
+
+Este repositorio forma parte de un sistema compuesto por infraestructura, servicios, frontend y MLOps. La guia central con URLs Git, estructura local, instalacion, ejecucion y despliegue se encuentra en:
+
+- [Guia de ejecucion multi-repositorio](docs/MULTI_REPO_SETUP.md)
+- [Servicios](https://github.com/quiquex222333/airbnb_group_back)
+- [Frontend](https://github.com/quiquex222333/airbnb_group_front)
+- [Modelo y entrenamiento MLOps](https://github.com/quiquex222333/protecto_modulo_15)
+
 ## Alcance
 
 Este stack crea y conecta:
@@ -234,6 +243,7 @@ Todos los endpoints usan authorizer Cognito.
 - `GET /v1/bookings/{bookingId}` -> `getBookingById` (`booking-service`)
 - `POST /v1/reviews` -> `createReview` (`review-service`)
 - `GET /v1/reviews/listing/{listingId}` -> `getReviewsByListing` (`review-service`)
+- `POST /v1/ml/predict` -> `predictSegment` (`ml-service`)
 
 ## Outputs del stack
 
