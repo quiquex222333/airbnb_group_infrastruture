@@ -10,6 +10,9 @@ import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as s3assets from "aws-cdk-lib/aws-s3-assets";
+import * as sagemaker from "aws-cdk-lib/aws-sagemaker";
 // impports para frontend y s3 este codigo no es autogenerado
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
@@ -21,6 +24,55 @@ export class CdkStack extends cdk.Stack {
     super(scope, id, props);
 
     const eventBus = new events.EventBus(this, "AirbnbEventBus");
+
+    // Modelo academico K-Means: CDK publica model.tar.gz en su bucket de assets.
+    const modelArchivePath = process.env.ML_MODEL_ARCHIVE ?? path.resolve(
+      __dirname,
+      "../../../MLOps/protecto_modulo_15/models/model.tar.gz"
+    );
+    const modelAsset = new s3assets.Asset(this, "KMeansModelAsset", {
+      path: modelArchivePath
+    });
+    const sageMakerRole = new iam.Role(this, "SageMakerExecutionRole", {
+      assumedBy: new iam.ServicePrincipal("sagemaker.amazonaws.com"),
+      inlinePolicies: {
+        ModelAssetRead: new iam.PolicyDocument({
+          statements: [new iam.PolicyStatement({
+            actions: ["s3:GetObject", "s3:GetObjectVersion"],
+            resources: [`${modelAsset.bucket.bucketArn}/${modelAsset.s3ObjectKey}`]
+          })]
+        })
+      }
+    });
+
+    const sageMakerModel = new sagemaker.CfnModel(this, "KMeansSageMakerModel", {
+      executionRoleArn: sageMakerRole.roleArn,
+      primaryContainer: {
+        image: cdk.Fn.sub(
+          "257758044811.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/sagemaker-scikit-learn:1.2-1-cpu-py3"
+        ),
+        modelDataUrl: modelAsset.s3ObjectUrl,
+        environment: {
+          SAGEMAKER_PROGRAM: "inference.py",
+          SAGEMAKER_SUBMIT_DIRECTORY: "/opt/ml/model/code"
+        }
+      }
+    });
+
+    const sageMakerEndpointConfig = new sagemaker.CfnEndpointConfig(this, "KMeansEndpointConfig", {
+      productionVariants: [{
+        modelName: sageMakerModel.attrModelName,
+        variantName: "AllTraffic",
+        serverlessConfig: {
+          memorySizeInMb: 1024,
+          maxConcurrency: 2
+        }
+      }]
+    });
+
+    const sageMakerEndpoint = new sagemaker.CfnEndpoint(this, "KMeansEndpoint", {
+      endpointConfigName: sageMakerEndpointConfig.attrEndpointConfigName
+    });
 
     const notificationDlq = new sqs.Queue(this, "NotificationDLQ", {
       retentionPeriod: cdk.Duration.days(14),
@@ -380,10 +432,21 @@ export class CdkStack extends cdk.Stack {
       handler: "predictSegment",
       projectRoot: servicesRoot,
       depsLockFilePath: path.join(servicesRoot, "package-lock.json"),
+      timeout: cdk.Duration.seconds(30),
       environment: {
-        FRONTEND_URL: frontendUrl
+        FRONTEND_URL: frontendUrl,
+        SAGEMAKER_ENDPOINT_NAME: sageMakerEndpoint.attrEndpointName
       }
     });
+
+    mlPredictionLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["sagemaker:InvokeEndpoint"],
+      resources: [cdk.Stack.of(this).formatArn({
+        service: "sagemaker",
+        resource: "endpoint",
+        resourceName: sageMakerEndpoint.attrEndpointName
+      })]
+    }));
 
     notificationLambda.addEventSource(
       new lambdaEventSources.SqsEventSource(notificationQueue, {
@@ -654,6 +717,10 @@ export class CdkStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "FrontendUrl", {
       value: `https://${distribution.distributionDomainName}`
+    });
+
+    new cdk.CfnOutput(this, "SageMakerEndpointName", {
+      value: sageMakerEndpoint.attrEndpointName
     });
 
     cdk.RemovalPolicies.of(this).destroy();
