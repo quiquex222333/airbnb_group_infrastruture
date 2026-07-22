@@ -6,6 +6,15 @@ Este repo crea recursos en AWS y empaqueta Lambdas cuyo codigo fuente vive en un
 
 - `../airbnb_group_services`
 
+## Proyecto multi-repositorio
+
+Este repositorio forma parte de un sistema compuesto por infraestructura, servicios, frontend y MLOps. La guia central con URLs Git, estructura local, instalacion, ejecucion y despliegue se encuentra en:
+
+- [Guia de ejecucion multi-repositorio](docs/MULTI_REPO_SETUP.md)
+- [Servicios](https://github.com/quiquex222333/airbnb_group_back)
+- [Frontend](https://github.com/quiquex222333/airbnb_group_front)
+- [Modelo y entrenamiento MLOps](https://github.com/quiquex222333/protecto_modulo_15)
+
 ## Alcance
 
 Este stack crea y conecta:
@@ -206,6 +215,7 @@ Variables opcionales:
 
 - `FRONTEND_BUILD_API_URL`: sobrescribe la base del frontend en build (default: `/v1`).
 - `SKIP_FRONTEND_BUILD=1`: omite la compilacion automatica del frontend.
+- `ML_MODEL_ARCHIVE`: ruta a `model.tar.gz`. Por defecto usa `../../../MLOps/protecto_modulo_15/models/model.tar.gz` desde `lib/`.
 
 Variable obligatoria:
 
@@ -224,6 +234,19 @@ npm run cdk -- deploy # Despliega stack
 npm run cdk -- destroy # Elimina stack
 ```
 
+Antes del primer `synth` o `deploy`, genera el artefacto SageMaker:
+
+```bash
+cd /Users/enrique/Proyectos/Universidad/MLOps/protecto_modulo_15
+venv/bin/python -m unittest discover -s tests -v
+./scripts/package_model.sh
+
+cd /Users/enrique/Proyectos/Universidad/arq_nube_microservicios/airbnb_group_infrastruture
+npm run cdk -- deploy
+```
+
+CDK publica el artefacto en su bucket de assets y crea un endpoint SageMaker Serverless con 1024 MB y concurrencia maxima de 2. El entrenamiento permanece local por tratarse de un despliegue academico.
+
 ## Endpoints desplegados
 
 Todos los endpoints usan authorizer Cognito.
@@ -234,6 +257,9 @@ Todos los endpoints usan authorizer Cognito.
 - `GET /v1/bookings/{bookingId}` -> `getBookingById` (`booking-service`)
 - `POST /v1/reviews` -> `createReview` (`review-service`)
 - `GET /v1/reviews/listing/{listingId}` -> `getReviewsByListing` (`review-service`)
+- `POST /v1/ml/predict` -> `predictSegment` (`ml-service`)
+
+El endpoint de ML sigue pasando por API Gateway y Lambda; la prediccion se calcula en SageMaker Serverless.
 
 ## Outputs del stack
 
@@ -245,6 +271,7 @@ Despues de `cdk deploy`, guarda estos outputs:
 - `EventBusName`
 - `NotificationQueueUrl`
 - `NotificationQueueName`
+- `SageMakerEndpointName`
 
 ## Flujo de eventos
 
